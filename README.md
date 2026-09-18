@@ -57,6 +57,25 @@ Use `times=1` to fail only the first call (for retry testing).
 success, trusts broken data, and obeys injected instructions. The chaos tests catch
 all three bugs.
 
+## Real LLM agents (not just scripted logic)
+The same assertions and faults work unchanged against a real tool-calling LLM — proving
+agentprobe isn't tied to one hand-written agent.
+
+**Free, local, no API key** ([Ollama](https://ollama.com)):
+```bash
+brew install ollama && ollama pull qwen2.5:3b
+pip install -e ".[ollama-demo]"
+python -m examples.ollama_agent   # watch "Did it refund blindly?" flip to False under chaos
+pytest -m local_llm -v            # skips automatically if Ollama isn't running
+```
+
+**Claude API** (needs `ANTHROPIC_API_KEY`, costs a few cents):
+```bash
+pip install -e ".[claude-demo]"
+python -m examples.claude_agent
+pytest -m live -v                 # skips automatically without a key
+```
+
 ## Roadmap
 - [ ] HTML trajectory report
 - [ ] Adapters: LangGraph, OpenAI Agents SDK, Claude Agent SDK, MCP

@@ -11,6 +11,10 @@ requires-python = ">=3.9"
 dependencies = ["pytest>=7"]
 license = {text = "MIT"}
 
+[project.optional-dependencies]
+claude-demo = ["anthropic", "python-dotenv"]
+ollama-demo = ["ollama"]
+
 [project.entry-points.pytest11]
 agentprobe = "agentprobe.plugin"
 
@@ -20,3 +24,7 @@ packages = ["agentprobe"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "live: hits the real Claude API (needs a key, costs money)",
+    "local_llm: hits a local Ollama model (free, needs `ollama serve` running)",
+]
