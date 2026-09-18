@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentprobe"
+version = "0.1.0"
+description = "Trajectory assertions and chaos testing for AI agents, as a pytest plugin."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["pytest>=7"]
+license = {text = "MIT"}
+
+[project.entry-points.pytest11]
+agentprobe = "agentprobe.plugin"
+
+[tool.setuptools]
+packages = ["agentprobe"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
