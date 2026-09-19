@@ -40,6 +40,9 @@ nav a { text-decoration: none; padding: 6px 12px; border-radius: 8px; color: var
 nav a:hover { background: var(--border); }
 nav a[aria-current="page"] { color: var(--ink); background: var(--border); font-weight: 600; }
 .meta { color: var(--muted); font-size: 0.82rem; margin: 0 0 20px; }
+.home { display: inline-block; margin: 0 0 4px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); text-decoration: none; font-size: 0.86rem; color: var(--ink2); }
+.home:hover { color: var(--ink); border-color: var(--ink2); }
+.home[hidden] { display: none; }
 h1 { font-size: 1.35rem; margin: 8px 0 4px; }
 h2 { font-size: 1rem; margin: 0 0 12px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
@@ -138,9 +141,10 @@ ol.steps li:last-child { border-bottom: none; }
 <body>
 <div class="wrap">
   <header class="top">
-    <a class="brand" href="#/">🔍 agentprobe</a>
+    <a class="brand" id="brand" href="#/">🔍 agentprobe</a>
     <nav id="nav" aria-label="Sections"></nav>
   </header>
+  <a class="home" id="home" href="#" hidden>← Back to agentprobe site</a>
   <p class="meta" id="meta"></p>
   <main id="app" aria-live="polite"></main>
 </div>
@@ -544,6 +548,13 @@ ol.steps li:last-child { border-bottom: none; }
 
   function start(data) {
     DATA = data;
+    var home = data.home_url;
+    if (home && !/^\s*javascript:/i.test(home)) {   // the link target comes from the exporter, never from run data
+      var homeLink = document.getElementById("home");
+      homeLink.href = home; homeLink.hidden = false;
+      var brand = document.getElementById("brand");
+      brand.href = home; brand.setAttribute("title", "Back to agentprobe site");
+    }
     meta.textContent = "Generated " + when(data.generated_at) + (data.run_details ? " · static export" : " · live");
     window.addEventListener("hashchange", route);
     route();

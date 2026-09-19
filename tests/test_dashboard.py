@@ -99,3 +99,22 @@ def test_cli_export(db, tmp_path, capsys):
 
     assert (tmp_path / "out" / "index.html").exists()
     assert "wrote" in capsys.readouterr().out
+
+
+def test_export_can_link_back_to_the_site(db, tmp_path):
+    out = dashboard.export(db, tmp_path / "site", home_url="../")
+
+    data = json.loads((out / "data.js").read_text().removeprefix("window.AGENTPROBE_DATA = ").removesuffix(";\n"))
+    assert data["home_url"] == "../"
+
+
+def test_no_back_link_unless_a_home_url_is_given(db, tmp_path):
+    out = dashboard.export(db, tmp_path / "site")
+
+    assert "home_url" not in (out / "data.js").read_text()
+
+
+def test_cli_export_home_option(db, tmp_path):
+    cli.main(["export", str(db), str(tmp_path / "out"), "--home", "https://example.com/"])
+
+    assert '"home_url": "https://example.com/"' in (tmp_path / "out" / "data.js").read_text()

@@ -17,7 +17,7 @@ from .store import Store
 STATIC = Path(__file__).parent / "dashboard_static"
 
 
-def build_data(store, details=False):
+def build_data(store, details=False, home_url=None):
     """Everything the dashboard shows. With details=True, also every run's trajectories and every
     test's history, so the result can be exported as a static site."""
     runs = store.runs()
@@ -39,19 +39,22 @@ def build_data(store, details=False):
         "tests": tests,
         "tools": store.tools(),
     }
+    if home_url:
+        data["home_url"] = home_url
     if details:
         data["run_details"] = {str(r["id"]): store.run(r["id"]) for r in runs}
         data["test_history"] = {t["nodeid"]: store.test_history(t["nodeid"]) for t in tests}
     return data
 
 
-def export(db_path, out_dir):
-    """Write a self-contained static dashboard (index.html + data.js) to out_dir."""
+def export(db_path, out_dir, home_url=None):
+    """Write a self-contained static dashboard (index.html + data.js) to out_dir. `home_url` adds a
+    "back to site" link (e.g. "../" when the dashboard lives in a subfolder of your site)."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     store = Store(db_path)
     try:
-        data = build_data(store, details=True)
+        data = build_data(store, details=True, home_url=home_url)
     finally:
         store.close()
     (out / "index.html").write_text((STATIC / "index.html").read_text())

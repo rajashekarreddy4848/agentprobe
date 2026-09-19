@@ -15,9 +15,10 @@ def main(argv=None):
     export = sub.add_parser("export", help="write a static copy of the dashboard")
     export.add_argument("db")
     export.add_argument("out_dir")
+    export.add_argument("--home", help='link back to your site, e.g. "../" if the dashboard is in a subfolder')
 
     args = parser.parse_args(argv)
     if args.command == "dashboard":
         dashboard.serve(args.db, args.port)
     else:
-        print(f"wrote {dashboard.export(args.db, args.out_dir)}")
+        print(f"wrote {dashboard.export(args.db, args.out_dir, home_url=args.home)}")
