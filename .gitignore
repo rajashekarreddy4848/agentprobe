@@ -8,3 +8,5 @@ examples/orders.db
 test_report.html
 runs.db
 *_report.html
+build/
+dist/

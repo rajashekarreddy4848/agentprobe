@@ -1,4 +1,4 @@
-"""The `agentprobe` command: dashboard and export."""
+"""The `agentprobe` command: playground, dashboard and export."""
 import argparse
 
 from . import dashboard
@@ -17,8 +17,16 @@ def main(argv=None):
     export.add_argument("out_dir")
     export.add_argument("--home", help='link back to your site, e.g. "../" if the dashboard is in a subfolder')
 
+    play = sub.add_parser("playground", help="describe an agent in a web page and test it on a real model")
+    play.add_argument("--port", type=int, default=8788)
+    play.add_argument("--no-open", action="store_true", help="don't open the browser automatically")
+
     args = parser.parse_args(argv)
-    if args.command == "dashboard":
+    if args.command == "playground":
+        from .playground.server import serve as serve_playground
+
+        serve_playground(args.port, open_browser=not args.no_open)
+    elif args.command == "dashboard":
         dashboard.serve(args.db, args.port)
     else:
         print(f"wrote {dashboard.export(args.db, args.out_dir, home_url=args.home)}")

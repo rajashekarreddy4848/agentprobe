@@ -145,6 +145,24 @@ local LLM don't fall for it.
 pytest tests/test_web_agent.py -v   # scripted agents run anywhere; the LLM test skips without Ollama
 ```
 
+## Playground: test an agent from a web page
+Describe an agent in your browser (its instructions and tools), pick a failure to inject, and see how a real model behaves,
+without writing any code.
+
+```bash
+agentprobe playground        # opens http://127.0.0.1:8788
+```
+- **Tools are simulated.** A tool is a name, a description, its parameters and a fixed result. Write `$order_id` in the
+  result to insert the model's argument of that name. Nothing you type is executed.
+- **Any model:** Ollama on your computer (free), or an OpenAI-compatible API such as OpenAI or OpenRouter (paste a key; it is
+  used for the run and never stored or logged).
+- **Failures and checks:** timeout, server error, malformed data, empty result, or a hidden instruction inside a result
+  field; then no-code checks (must call, never call, order rules, step limit). Run several times to get a pass rate.
+- **Turn it into a real test:** the page generates the matching `pytest` code to copy into your project.
+
+It is local-only on purpose: the server listens on 127.0.0.1, refuses requests addressed to another host and cross-site posts,
+and renders everything as text. It needs no packages beyond agentprobe itself (models are reached over plain HTTP).
+
 ## A second domain: a flight-booking assistant
 Agentprobe isn't about refunds. `examples/booking_agent.py` is a flight-booking assistant, where a mistake costs
 money (everything is simulated). The cheapest flight is sold out, so "cheapest" and "cheapest available" differ.

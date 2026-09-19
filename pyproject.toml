@@ -25,10 +25,10 @@ agentprobe = "agentprobe.cli:main"
 agentprobe = "agentprobe.plugin"
 
 [tool.setuptools]
-packages = ["agentprobe", "agentprobe.adapters"]
+packages = ["agentprobe", "agentprobe.adapters", "agentprobe.playground"]
 
 [tool.setuptools.package-data]
-agentprobe = ["dashboard_static/*"]
+agentprobe = ["dashboard_static/*", "playground/static/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
