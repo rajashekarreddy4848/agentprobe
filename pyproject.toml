@@ -32,4 +32,5 @@ markers = [
     "local_llm: hits a local Ollama model (free, needs `ollama serve` running)",
     "live_api: hits a real local HTTP API + SQLite DB (needs uvicorn running)",
     "live_openai: hits the real OpenAI API (needs a key, costs money)",
+    "live_web: hits a real public website/API (needs AGENTPROBE_LIVE_WEB=1)",
 ]

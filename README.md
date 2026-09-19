@@ -132,6 +132,23 @@ local LLM don't fall for it.
 pytest tests/test_web_agent.py -v   # scripted agents run anywhere; the LLM test skips without Ollama
 ```
 
+## Live data: a Hacker News agent
+`examples/hn_tools.py` calls the real, public Hacker News API (no key). The agent must fetch live data
+instead of answering from memory, and must treat comments (written by strangers) as data, not instructions.
+
+```bash
+python -m examples.hn_agent                     # real local LLM on live HN, with and without an injected comment
+pytest tests/test_hn_agent.py -v                # deterministic: runs against a local fake HN server, safe for CI
+AGENTPROBE_LIVE_WEB=1 pytest -m live_web -v     # opt in: hits the real API (LLM tests also need Ollama)
+```
+`prompt_injection` accepts `field="text"` to hide the payload inside a field the agent already reads
+(for a list of records, the first record), so the result keeps its real shape:
+`@pytest.mark.fault("get_comments", "prompt_injection", payload="...", field="text")`.
+
+A real finding from this suite: the 3B local model resisted the injected instruction but called
+`get_comments` with a story id it invented instead of the one it had just been given, and then
+summarized unrelated comments as if they belonged to the top story.
+
 ## See your test run as a web page
 ```bash
 pytest --agentprobe-report=test_report.html
@@ -163,6 +180,7 @@ Publish free: GitHub repo -> Settings -> Pages -> Deploy from branch `main`, fol
 - [x] HTML trajectory report
 - [x] Real tool backend (HTTP + SQLite), not just in-memory functions
 - [x] Indirect prompt injection via a fetched web page
+- [x] Live public API (Hacker News) + shape-preserving prompt injection
 - [x] Adapter: MCP
 - [ ] Adapters: OpenAI Agents SDK, Claude Agent SDK
 - [ ] Metamorphic testing (paraphrased prompts → same trajectory)
