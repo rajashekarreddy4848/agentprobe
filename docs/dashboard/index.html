@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agentprobe dashboard</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%232a78d6'/><text x='32' y='44' font-size='34' font-weight='700' text-anchor='middle' fill='white' font-family='system-ui,sans-serif'>Ap</text></svg>">
 <style>
 :root {
   color-scheme: light;
@@ -34,7 +34,8 @@ body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 var
 a { color: inherit; }
 .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px 64px; }
 header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 18px 0 8px; }
-.brand { font-weight: 700; font-size: 1.05rem; text-decoration: none; }
+.brand { font-weight: 800; font-size: 1.3rem; letter-spacing: -0.04em; text-decoration: none; }
+.brand b { color: var(--series); font-weight: 800; }
 nav { display: flex; gap: 4px; flex-wrap: wrap; }
 nav a { text-decoration: none; padding: 6px 12px; border-radius: 8px; color: var(--ink2); font-size: 0.92rem; }
 nav a:hover { background: var(--border); }
@@ -141,7 +142,7 @@ ol.steps li:last-child { border-bottom: none; }
 <body>
 <div class="wrap">
   <header class="top">
-    <a class="brand" id="brand" href="#/">🔍 agentprobe</a>
+    <a class="brand" id="brand" href="#/">Agent<b>probe</b></a>
     <nav id="nav" aria-label="Sections"></nav>
   </header>
   <a class="home" id="home" href="#" hidden>← Back to agentprobe site</a>
@@ -550,10 +551,13 @@ ol.steps li:last-child { border-bottom: none; }
     DATA = data;
     var home = data.home_url;
     if (home && !/^\s*javascript:/i.test(home)) {   // the link target comes from the exporter, never from run data
+      var embedded = true;
+      try { embedded = window.top !== window.self; } catch (e) { /* cross-origin parent: still embedded */ }
       var homeLink = document.getElementById("home");
-      homeLink.href = home; homeLink.hidden = false;
+      homeLink.href = home; homeLink.hidden = embedded;   // inside a frame the site is already the parent
       var brand = document.getElementById("brand");
       brand.href = home; brand.setAttribute("title", "Back to agentprobe site");
+      if (embedded) brand.target = "_top";
     }
     meta.textContent = "Generated " + when(data.generated_at) + (data.run_details ? " · static export" : " · live");
     window.addEventListener("hashchange", route);

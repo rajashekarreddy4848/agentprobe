@@ -118,3 +118,11 @@ def test_cli_export_home_option(db, tmp_path):
     cli.main(["export", str(db), str(tmp_path / "out"), "--home", "https://example.com/"])
 
     assert '"home_url": "https://example.com/"' in (tmp_path / "out" / "data.js").read_text()
+
+
+def test_embedded_dashboard_does_not_load_the_site_inside_itself():
+    """The landing page embeds the dashboard in a frame; its back link must not open the site in there."""
+    html = (dashboard.STATIC / "index.html").read_text()
+
+    assert "window.top !== window.self" in html
+    assert 'brand.target = "_top"' in html

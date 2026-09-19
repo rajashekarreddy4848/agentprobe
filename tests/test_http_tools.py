@@ -4,15 +4,16 @@ Run locally with:
     uvicorn examples.api_server:app --port 8000   (separate terminal)
     pytest -m live_api -v
 """
-import socket
+import urllib.request
 
 import pytest
 
 
 def _server_running():
+    """True only if the demo API answers, not merely if something is listening on port 8000."""
     try:
-        with socket.create_connection(("localhost", 8000), timeout=0.5):
-            return True
+        with urllib.request.urlopen("http://localhost:8000/orders/A123", timeout=1) as response:
+            return response.status == 200
     except OSError:
         return False
 

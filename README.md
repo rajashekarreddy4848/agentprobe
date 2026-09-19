@@ -1,4 +1,4 @@
-# agentprobe 🔍
+# agentprobe
 
 **Test what your AI agent *does*, not just what it *says*.**
 
