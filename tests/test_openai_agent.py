@@ -60,6 +60,9 @@ def test_warns_when_pointed_at_openrouter_with_a_model_that_may_cost_money(monke
     import sys
     import warnings
 
+    pytest.importorskip("openai")  # optional packages: the CI job only installs the core extras
+    pytest.importorskip("dotenv")
+
     monkeypatch.setenv("OPENAI_API_KEY", "not-a-real-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
 
