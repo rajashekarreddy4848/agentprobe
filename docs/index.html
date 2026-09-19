@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentprobe — test what your AI agent does</title>
+<meta name="description" content="A pytest plugin that records every tool call your AI agent makes, asserts on the trajectory, and injects chaos (timeouts, bad data, prompt injection) to check the agent fails safely.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+<style>
+:root {
+  --bg: #ffffff; --fg: #111827; --muted: #6b7280; --border: #e5e7eb; --card: #f9fafb;
+  --accent: #2563eb; --accent-fg: #ffffff; --ok: #047857; --err: #b91c1c; --fault: #b45309;
+  --ok-bg: #ecfdf5; --err-bg: #fef2f2; --fault-bg: #fffbeb;
+  --code-bg: #0f172a; --code-fg: #e2e8f0;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0d12; --fg: #e5e7eb; --muted: #9ca3af; --border: #232733; --card: #12151c;
+    --accent: #60a5fa; --accent-fg: #0b0d12; --ok: #34d399; --err: #f87171; --fault: #fbbf24;
+    --ok-bg: #062a20; --err-bg: #2a0e0e; --fault-bg: #2a1e07;
+    --code-bg: #12151c; --code-fg: #e2e8f0;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0d12; --fg: #e5e7eb; --muted: #9ca3af; --border: #232733; --card: #12151c;
+  --accent: #60a5fa; --accent-fg: #0b0d12; --ok: #34d399; --err: #f87171; --fault: #fbbf24;
+  --ok-bg: #062a20; --err-bg: #2a0e0e; --fault-bg: #2a1e07;
+  --code-bg: #12151c; --code-fg: #e2e8f0;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--accent); }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+nav { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; }
+nav .brand { font-weight: 700; font-size: 1.05rem; text-decoration: none; color: var(--fg); }
+nav .links { display: flex; gap: 18px; align-items: center; font-size: 0.92rem; }
+nav .links a { color: var(--muted); text-decoration: none; }
+nav .links a:hover { color: var(--fg); }
+
+.hero { padding: 48px 0 32px; text-align: center; }
+.hero h1 { font-size: clamp(2rem, 5vw, 3.1rem); line-height: 1.15; margin: 0 0 16px; letter-spacing: -0.02em; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero p.lead { font-size: 1.15rem; color: var(--muted); max-width: 640px; margin: 0 auto 26px; }
+.btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  display: inline-block; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
+  text-decoration: none; border: 1px solid var(--border); color: var(--fg); background: var(--card);
+}
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+
+section { padding: 40px 0; }
+section h2 { font-size: 1.6rem; margin: 0 0 6px; letter-spacing: -0.01em; }
+section .sub { color: var(--muted); margin: 0 0 24px; }
+
+/* demo */
+.demo { border: 1px solid var(--border); border-radius: 14px; background: var(--card); overflow: hidden; }
+.controls { padding: 18px; border-bottom: 1px solid var(--border); display: grid; gap: 14px; }
+.ctl-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
+.seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg button {
+  font: inherit; font-size: 0.9rem; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+}
+.seg button:hover { border-color: var(--accent); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.fault-note { font-size: 0.88rem; color: var(--muted); min-height: 1.4em; }
+
+.stage { padding: 18px; min-height: 260px; display: grid; gap: 12px; align-content: start; }
+.bubble {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px;
+  max-width: 420px; font-size: 0.95rem;
+}
+.bubble small { display: block; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+.step {
+  background: var(--bg); border: 1px solid var(--border); border-left: 4px solid var(--ok);
+  border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 0.85rem;
+  animation: pop 0.25s ease-out;
+}
+.step.error { border-left-color: var(--err); }
+.step.fault { border-left-color: var(--fault); }
+.step .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.step .n { color: var(--muted); }
+.step .tool { font-weight: 700; }
+.step .res { margin-top: 4px; color: var(--muted); word-break: break-word; }
+.step.error .res { color: var(--err); }
+.badge {
+  font-family: -apple-system, sans-serif; font-size: 0.68rem; font-weight: 700; padding: 1px 8px;
+  border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.badge.fault { background: var(--fault-bg); color: var(--fault); }
+.badge.error { background: var(--err-bg); color: var(--err); }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.checks { display: grid; gap: 6px; animation: pop 0.25s ease-out; }
+.checks h3 { margin: 6px 0 2px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.check { display: flex; gap: 10px; align-items: center; font-size: 0.93rem; animation: pop 0.25s ease-out; }
+.check .icon { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 0.75rem; font-weight: 700; flex: none; }
+.check.pass .icon { background: var(--ok-bg); color: var(--ok); }
+.check.fail .icon { background: var(--err-bg); color: var(--err); }
+.verdict { padding: 12px 16px; border-radius: 10px; font-weight: 600; animation: pop 0.25s ease-out; }
+.verdict.pass { background: var(--ok-bg); color: var(--ok); }
+.verdict.fail { background: var(--err-bg); color: var(--err); }
+.demo-foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 0.82rem; color: var(--muted); }
+.replay { font: inherit; font-size: 0.85rem; padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); cursor: pointer; }
+@keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* scoreboard */
+.score { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.92rem; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.score th, .score td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border); }
+.score th { background: var(--card); font-weight: 600; font-size: 0.8rem; color: var(--muted); }
+.score th:first-child, .score td:first-child { text-align: left; }
+.score tr:last-child td { border-bottom: none; }
+.score button { font: inherit; border: 0; cursor: pointer; padding: 3px 12px; border-radius: 999px; font-weight: 700; font-size: 0.82rem; }
+.score button.pass { background: var(--ok-bg); color: var(--ok); }
+.score button.fail { background: var(--err-bg); color: var(--err); }
+.scroll-x { overflow-x: auto; }
+
+/* cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.card { border: 1px solid var(--border); border-radius: 12px; padding: 18px; background: var(--card); }
+.card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+.num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); font-weight: 700; font-size: 0.85rem; margin-bottom: 10px; }
+
+pre { background: var(--code-bg); color: var(--code-fg); padding: 18px; border-radius: 12px; overflow-x: auto; font: 0.86rem/1.6 var(--mono); margin: 0; }
+pre .c { color: #94a3b8; }
+table.api { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
+table.api th, table.api td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.api code { font-family: var(--mono); font-size: 0.85rem; background: var(--card); padding: 1px 6px; border-radius: 5px; }
+footer { border-top: 1px solid var(--border); margin-top: 32px; padding: 28px 0 48px; color: var(--muted); font-size: 0.9rem; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="#">🔍 agentprobe</a>
+    <div class="links">
+      <a href="#demo">Demo</a>
+      <a href="#how">How it works</a>
+      <a href="#api">API</a>
+      <a href="https://github.com/rajashekarreddy4848/agentprobe">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <h1>Test what your AI agent <em>does</em>,<br>not just what it says.</h1>
+    <p class="lead">agentprobe is a pytest plugin that records every tool call an agent makes, asserts on the trajectory, and injects chaos &mdash; timeouts, bad data, prompt injection &mdash; to check the agent fails <em>safely</em>.</p>
+    <div class="btns">
+      <a class="btn primary" href="#demo">Try the live demo</a>
+      <a class="btn" href="https://github.com/rajashekarreddy4848/agentprobe">View on GitHub</a>
+    </div>
+  </header>
+
+  <section id="demo">
+    <h2>See it catch a bug</h2>
+    <p class="sub">Pick a test suite, an agent and a scenario. Every run below is a real recording &mdash; nothing here is mocked up for the page.</p>
+
+    <div class="demo">
+      <div class="controls">
+        <div>
+          <div class="ctl-label">Test suite</div>
+          <div class="seg" id="suite-seg"></div>
+          <div class="fault-note" id="suite-note"></div>
+        </div>
+        <div>
+          <div class="ctl-label">1 &middot; Agent under test</div>
+          <div class="seg" id="agent-seg"></div>
+        </div>
+        <div>
+          <div class="ctl-label" id="scenario-label">2 &middot; Scenario</div>
+          <div class="seg" id="fault-seg"></div>
+          <div class="fault-note" id="fault-note"></div>
+        </div>
+      </div>
+      <div class="stage" id="stage" aria-live="polite"></div>
+      <div class="demo-foot">
+        <span id="run-note"></span>
+        <button class="replay" id="replay">&#8635; Replay</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="scoreboard">
+    <h2>Scoreboard</h2>
+    <p class="sub">Every agent against every failure. Click a cell to watch that run.</p>
+    <div class="scroll-x"><table class="score" id="score"></table></div>
+  </section>
+
+  <section id="how">
+    <h2>How it works</h2>
+    <p class="sub">agentprobe sits between your agent and its tools. Your agent code doesn't change.</p>
+    <div class="cards">
+      <div class="card"><div class="num">1</div><h3>Record</h3><p>Wrap your tools with <code>probe.wrap()</code>. Every call, argument, result and error is captured as a trajectory.</p></div>
+      <div class="card"><div class="num">2</div><h3>Break</h3><p>Mark a test with <code>@pytest.mark.fault</code> to make a tool time out, return 500s, return garbage, or smuggle in a prompt injection.</p></div>
+      <div class="card"><div class="num">3</div><h3>Assert</h3><p>Check what the agent did: order of calls, forbidden tools, arguments, step limits. Failures print the full trajectory.</p></div>
+    </div>
+  </section>
+
+  <section id="code">
+    <h2>Three lines of test</h2>
+    <p class="sub">Works with any tool-calling agent &mdash; scripted, Claude, OpenAI, or a local model.</p>
+<pre><span class="c"># the tool "lookup_order" will time out; the agent must not refund blindly</span>
+@pytest.mark.fault("lookup_order", "timeout")
+def test_no_blind_refund_on_timeout(probe):
+    my_agent("Refund order A123", probe.wrap(TOOLS))
+    (probe.trajectory
+        .called_after_success("lookup_order", "issue_refund")
+        .called("escalate_to_human"))</pre>
+  </section>
+
+  <section id="api">
+    <h2>Assertions &amp; faults</h2>
+    <p class="sub">All assertions are chainable.</p>
+    <div class="scroll-x">
+    <table class="api">
+      <tr><th>Assertion</th><th>Checks that&hellip;</th></tr>
+      <tr><td><code>called(tool, times=None)</code></td><td>the tool was called (optionally exactly N times)</td></tr>
+      <tr><td><code>never_called(*tools)</code></td><td>dangerous tools were never used</td></tr>
+      <tr><td><code>called_before(a, b)</code></td><td><code>b</code> never happens before <code>a</code></td></tr>
+      <tr><td><code>called_after_success(a, b)</code></td><td><code>b</code> only happens after <code>a</code> succeeded</td></tr>
+      <tr><td><code>called_with(tool, **kwargs)</code></td><td>a call matched these arguments</td></tr>
+      <tr><td><code>max_steps(n)</code></td><td>the agent didn't loop or wander</td></tr>
+    </table>
+    </div>
+    <p style="margin-top:18px"><strong>Faults:</strong> <code>timeout</code> &middot; <code>server_error</code> &middot; <code>malformed</code> &middot; <code>empty</code> &middot; <code>prompt_injection</code></p>
+  </section>
+
+  <footer>
+    <p>MIT licensed &middot; <a href="https://github.com/rajashekarreddy4848/agentprobe">github.com/rajashekarreddy4848/agentprobe</a></p>
+    <p>Built by <a href="https://rajashekarreddy4848.github.io">Rajashekar Reddy</a></p>
+  </footer>
+</div>
+
+<script src="demo-data.js"></script>
+<script>
+(function () {
+  var SUITES = window.DEMO_DATA.suites;
+  var state = { suite: 0, agent: "buggy", scenario: "timeout" };
+  var token = 0;
+
+  var stage = document.getElementById("stage");
+  var suiteSeg = document.getElementById("suite-seg");
+  var suiteNote = document.getElementById("suite-note");
+  var agentSeg = document.getElementById("agent-seg");
+  var faultSeg = document.getElementById("fault-seg");
+  var faultNote = document.getElementById("fault-note");
+  var scenarioLabel = document.getElementById("scenario-label");
+  var runNote = document.getElementById("run-note");
+  var score = document.getElementById("score");
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function delay(ms) { return reduce ? Promise.resolve() : wait(ms); }
+
+  function suite() { return SUITES[state.suite]; }
+  function scenarioOf(key) { return suite().scenarios.filter(function (s) { return s.key === key; })[0]; }
+  function runOf(agent, scenario) { return suite().agents[agent].runs[scenario]; }
+  function allPassed(run) { return run.checks.every(function (c) { return c.passed; }); }
+  function fmtArgs(args) {
+    return Object.keys(args).map(function (k) { return k + "=" + JSON.stringify(args[k]); }).join(", ");
+  }
+
+  function buildSuiteButtons() {
+    SUITES.forEach(function (s, i) {
+      var b = el("button", null, s.title);
+      b.type = "button"; b.dataset.index = i;
+      b.addEventListener("click", function () {
+        state.suite = i;
+        if (!scenarioOf(state.scenario)) state.scenario = suite().scenarios[0].key;
+        buildAgentAndScenarioButtons();
+        buildScore();
+        refresh();
+      });
+      suiteSeg.appendChild(b);
+    });
+  }
+
+  function buildAgentAndScenarioButtons() {
+    agentSeg.textContent = "";
+    faultSeg.textContent = "";
+    Object.keys(suite().agents).forEach(function (key) {
+      var b = el("button", null, suite().agents[key].label);
+      b.type = "button"; b.dataset.key = key;
+      b.addEventListener("click", function () { state.agent = key; refresh(); });
+      agentSeg.appendChild(b);
+    });
+    suite().scenarios.forEach(function (s) {
+      var b = el("button", null, s.label);
+      b.type = "button"; b.dataset.key = s.key;
+      b.addEventListener("click", function () { state.scenario = s.key; refresh(); });
+      faultSeg.appendChild(b);
+    });
+  }
+
+  function syncControls() {
+    Array.prototype.forEach.call(suiteSeg.children, function (b) { b.setAttribute("aria-pressed", String(Number(b.dataset.index) === state.suite)); });
+    Array.prototype.forEach.call(agentSeg.children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.key === state.agent)); });
+    Array.prototype.forEach.call(faultSeg.children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.key === state.scenario)); });
+    suiteNote.textContent = suite().blurb;
+    scenarioLabel.textContent = "2 · " + suite().scenarioTitle;
+    faultNote.textContent = scenarioOf(state.scenario).note;
+    runNote.textContent = state.agent === "llm"
+      ? "Recorded from a real local model at temperature 0. It may behave differently on other runs."
+      : (state.agent === "buggy" ? "This agent is intentionally buggy, to show what agentprobe catches." : "Scripted reference agent that handles failures correctly.");
+  }
+
+  async function play() {
+    var my = ++token;
+    stage.textContent = "";
+    var run = runOf(state.agent, state.scenario);
+
+    var b = el("div", "bubble");
+    b.appendChild(el("small", null, "User"));
+    b.appendChild(document.createTextNode(scenarioOf(state.scenario).message));
+    stage.appendChild(b);
+    await delay(500);
+
+    for (var i = 0; i < run.calls.length; i++) {
+      if (my !== token) return;
+      var c = run.calls[i];
+      var cls = "step" + (c.error ? " error" : (c.fault ? " fault" : ""));
+      var s = el("div", cls);
+      var head = el("div", "head");
+      head.appendChild(el("span", "n", c.step + "."));
+      head.appendChild(el("span", "tool", c.tool + "(" + fmtArgs(c.args) + ")"));
+      if (c.fault) head.appendChild(el("span", "badge fault", "fault: " + c.fault));
+      head.appendChild(el("span", c.error ? "badge error" : "badge ok", c.error ? "error" : "ok"));
+      s.appendChild(head);
+      s.appendChild(el("div", "res", c.error ? c.error : "→ " + c.result));
+      stage.appendChild(s);
+      await delay(650);
+    }
+
+    if (my !== token) return;
+    var box = el("div", "checks");
+    box.appendChild(el("h3", null, "agentprobe assertions"));
+    stage.appendChild(box);
+    for (var j = 0; j < run.checks.length; j++) {
+      if (my !== token) return;
+      var ck = run.checks[j];
+      var row = el("div", "check " + (ck.passed ? "pass" : "fail"));
+      row.appendChild(el("span", "icon", ck.passed ? "✓" : "✗"));
+      row.appendChild(el("span", null, ck.name));
+      box.appendChild(row);
+      await delay(280);
+    }
+
+    if (my !== token) return;
+    var ok = allPassed(run);
+    var failed = run.checks.filter(function (x) { return !x.passed; }).length;
+    stage.appendChild(el("div", "verdict " + (ok ? "pass" : "fail"),
+      ok ? "All " + run.checks.length + " assertions passed — the agent failed safely."
+         : "Bug caught: " + failed + " of " + run.checks.length + " assertions failed."));
+  }
+
+  function buildScore() {
+    score.textContent = "";
+    var head = el("tr");
+    head.appendChild(el("th", null, "Agent"));
+    suite().scenarios.forEach(function (s) { head.appendChild(el("th", null, s.label)); });
+    score.appendChild(head);
+    Object.keys(suite().agents).forEach(function (key) {
+      var tr = el("tr");
+      tr.appendChild(el("td", null, suite().agents[key].label));
+      suite().scenarios.forEach(function (s) {
+        var td = el("td");
+        var ok = allPassed(runOf(key, s.key));
+        var btn = el("button", ok ? "pass" : "fail", ok ? "✓ pass" : "✗ fail");
+        btn.type = "button";
+        btn.setAttribute("aria-label", suite().agents[key].label + ", " + s.label + ": " + (ok ? "pass" : "fail") + ". Show this run.");
+        btn.addEventListener("click", function () {
+          state.agent = key; state.scenario = s.key; refresh();
+          document.getElementById("demo").scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
+        });
+        td.appendChild(btn);
+        tr.appendChild(td);
+      });
+      score.appendChild(tr);
+    });
+  }
+
+  function refresh() { syncControls(); play(); }
+
+  buildSuiteButtons();
+  buildAgentAndScenarioButtons();
+  buildScore();
+  document.getElementById("replay").addEventListener("click", play);
+  refresh();
+})();
+</script>
+</body>
+</html>

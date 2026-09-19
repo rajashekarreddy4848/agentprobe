@@ -29,7 +29,8 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
   font-size: 1rem; margin: 0; padding: 0.85rem 1.1rem; background: var(--card);
   border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;
 }
-.note { font-size: 0.85rem; color: var(--muted); font-weight: normal; }
+.note { font-size: 0.85rem; color: var(--muted); font-weight: normal; white-space: nowrap; margin-left: 12px; }
+.scenario h2 > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 ol.steps { list-style: none; margin: 0; padding: 0.5rem 1.1rem 1rem; }
 ol.steps li { padding: 0.6rem 0; border-bottom: 1px dashed var(--border); font-family: var(--mono); font-size: 0.85rem; }
 ol.steps li:last-child { border-bottom: none; }

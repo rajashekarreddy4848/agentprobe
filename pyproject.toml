@@ -14,12 +14,16 @@ license = {text = "MIT"}
 [project.optional-dependencies]
 claude-demo = ["anthropic", "python-dotenv"]
 ollama-demo = ["ollama"]
+api-demo = ["fastapi", "uvicorn", "requests"]
+openai-demo = ["openai", "python-dotenv"]
+langchain = ["langchain>=1.0", "langgraph>=1.0", "langchain-ollama"]
+mcp = ["mcp>=2.0", "ollama"]
 
 [project.entry-points.pytest11]
 agentprobe = "agentprobe.plugin"
 
 [tool.setuptools]
-packages = ["agentprobe"]
+packages = ["agentprobe", "agentprobe.adapters"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -27,4 +31,6 @@ testpaths = ["tests"]
 markers = [
     "live: hits the real Claude API (needs a key, costs money)",
     "local_llm: hits a local Ollama model (free, needs `ollama serve` running)",
+    "live_api: hits a real local HTTP API + SQLite DB (needs uvicorn running)",
+    "live_openai: hits the real OpenAI API (needs a key, costs money)",
 ]

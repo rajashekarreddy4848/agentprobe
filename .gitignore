@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 .env
 trajectory_report.html
+examples/orders.db
+test_report.html

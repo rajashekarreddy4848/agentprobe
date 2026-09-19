@@ -76,9 +76,104 @@ python -m examples.claude_agent
 pytest -m live -v                 # skips automatically without a key
 ```
 
+**OpenAI API** (needs `OPENAI_API_KEY`, costs a few cents):
+```bash
+pip install -e ".[openai-demo]"
+python -m examples.openai_agent
+pytest -m live_openai -v          # skips automatically without a key
+```
+
+## Real tools, not just mocked functions
+`examples/api_server.py` is a small FastAPI service backed by a real SQLite database.
+`examples/http_tools.py` calls it over genuine HTTP — same tool names, so `probe.wrap()`
+and every assertion/fault work completely unchanged. Proves agentprobe isn't tied to
+in-memory Python functions.
+
+```bash
+pip install -e ".[api-demo]"
+uvicorn examples.api_server:app --port 8000 &   # separate terminal, or background
+pip install -e ".[ollama-demo]" && ollama serve &
+python -m examples.live_api_demo                # real HTTP calls, real DB writes, real chaos
+pytest -m live_api -v                           # skips automatically if the server isn't running
+```
+
+`simulate_slow=true` / `simulate_error=true` query params on `GET /orders/{id}` also let
+you demo genuine server-side flakiness, separate from agentprobe's own synthetic faults.
+
+## Framework adapters
+agentprobe plugs into agent frameworks, so you can test agents you've already built.
+Both adapters are tested against a real LangGraph graph and a real MCP server, driven by a scripted
+model (deterministic, runs in CI) and by a real local LLM (skips without Ollama).
+
+**LangChain / LangGraph** wraps your tools; use the wrapped tools anywhere you'd use the originals:
+```python
+from agentprobe.adapters.langchain import wrap_tools
+
+agent = create_agent(model, wrap_tools(probe, [lookup_order, issue_refund]))
+```
+A failing tool reaches the model as a tool message (not a crash), like it would in production.
+
+**MCP** wraps the client, so every `call_tool` is recorded and fault-injected:
+```python
+from agentprobe.adapters.mcp import ProbedMCPClient
+
+async with Client(server) as client:
+    await my_agent(message, ProbedMCPClient(probe, client))
+```
+A tool the *server* reports as failed (`is_error`) is recorded as an error and the agent still receives it.
+
+```bash
+pip install -e ".[langchain,mcp]"
+pytest tests/test_adapter_langchain.py tests/test_adapter_mcp.py -v
+python -m examples.langgraph_agent   # real LLM in a LangGraph graph, with and without a fault
+python -m examples.mcp_refund_server # the refund tools as an MCP server (stdio)
+```
+`Probe.wrap_async()` records any `async def` tool, so other async frameworks can be adapted the same way.
+
+## Web-reading agent: indirect prompt injection
+The riskiest real-world attack isn't the user, it's the *content* an agent reads. `examples/web_agent.py`
+summarizes a page fetched over real HTTP; `docs/demo/article-injected.html` hides an instruction for
+AI assistants in the page. The buggy agent obeys it and calls `send_email` / `delete_file` (both simulated
+in `examples/web_tools.py`, so nothing real can happen); agentprobe catches it, and the safe agent and the
+local LLM don't fall for it.
+
+```bash
+pytest tests/test_web_agent.py -v   # scripted agents run anywhere; the LLM test skips without Ollama
+```
+
+## See your test run as a web page
+```bash
+pytest --agentprobe-report=test_report.html
+open test_report.html
+```
+Every test that used the `probe` fixture gets a card with its full trajectory and result
+(`PASSED`, `FAILED`, or `XFAIL (bug caught)`).
+
+## HTML trajectory report
+Render one or more runs as a single, shareable HTML page with color-coded pass/fail/fault
+badges — no external dependencies, works in light and dark mode.
+
+```bash
+python -m examples.generate_report
+open trajectory_report.html
+```
+
+## Demo website
+`docs/` is a static site (no build step) with an interactive demo: pick an agent and a failure,
+and watch the trajectory and assertions play out. The runs are real recordings.
+
+```bash
+python -m examples.record_demo_data   # re-record from the agents (needs `ollama serve`)
+cd docs && python -m http.server 8000  # preview at http://localhost:8000
+```
+Publish free: GitHub repo -> Settings -> Pages -> Deploy from branch `main`, folder `/docs`.
+
 ## Roadmap
-- [ ] HTML trajectory report
-- [ ] Adapters: LangGraph, OpenAI Agents SDK, Claude Agent SDK, MCP
+- [x] HTML trajectory report
+- [x] Real tool backend (HTTP + SQLite), not just in-memory functions
+- [x] Indirect prompt injection via a fetched web page
+- [x] Adapters: LangChain/LangGraph, MCP
+- [ ] Adapters: OpenAI Agents SDK, Claude Agent SDK
 - [ ] Metamorphic testing (paraphrased prompts → same trajectory)
 - [ ] Record/replay of real tool responses for CI
 

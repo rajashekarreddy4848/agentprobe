@@ -41,6 +41,10 @@ class Probe:
             return self._wrap_one(name or f.__name__, f)
         return deco(fn) if fn else deco
 
+    def wrap_async(self, fn, *, name=None):
+        """Wrap an `async def` tool. Same recording and faults as the sync version."""
+        return self._wrap_one_async(name or fn.__name__, fn)
+
     @property
     def trajectory(self):
         return Trajectory(self.calls)
@@ -51,20 +55,42 @@ class Probe:
                 return f
         return None
 
+    def _begin(self, name, args, kwargs):
+        call = ToolCall(step=len(self.calls) + 1, tool=name, args=args, kwargs=kwargs)
+        self.calls.append(call)
+        fault = self._active_fault(name)
+        if fault:
+            call.fault = fault.name
+            fault.fired += 1
+        return call, fault, time.perf_counter()
+
     def _wrap_one(self, name, fn):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            call = ToolCall(step=len(self.calls) + 1, tool=name, args=args, kwargs=kwargs)
-            self.calls.append(call)
-            fault = self._active_fault(name)
-            start = time.perf_counter()
+            call, fault, start = self._begin(name, args, kwargs)
             try:
-                if fault:
-                    call.fault = fault.name
-                    fault.fired += 1
+                result = fault.apply(fn, args, kwargs) if fault else fn(*args, **kwargs)
+                call.result = result
+                return result
+            except Exception as e:
+                call.error = f"{type(e).__name__}: {e}"
+                raise
+            finally:
+                call.duration_ms = (time.perf_counter() - start) * 1000
+        return wrapper
+
+    def _wrap_one_async(self, name, fn):
+        @functools.wraps(fn)
+        async def wrapper(*args, **kwargs):
+            call, fault, start = self._begin(name, args, kwargs)
+            try:
+                if fault and fault.wraps_result:
+                    real = await fn(*args, **kwargs)
+                    result = fault.apply(lambda *a, **k: real, args, kwargs)
+                elif fault:
                     result = fault.apply(fn, args, kwargs)
                 else:
-                    result = fn(*args, **kwargs)
+                    result = await fn(*args, **kwargs)
                 call.result = result
                 return result
             except Exception as e:
