@@ -132,6 +132,27 @@ local LLM don't fall for it.
 pytest tests/test_web_agent.py -v   # scripted agents run anywhere; the LLM test skips without Ollama
 ```
 
+## Says vs. does: catch an agent that lies about what it did
+An agent's reply is a set of claims, and its trajectory is the evidence. Two chainable assertions compare them:
+
+```python
+reply = my_agent("Refund order A123", probe.wrap(TOOLS))
+
+(probe.trajectory
+    .claims_backed_by_actions(reply, {"issue_refund": r"refund.*(issued|processed)|refunded"})  # no hallucinated success
+    .actions_disclosed_in_reply(reply, {"delete_account": r"delet|remov|clos"}))                # no silent side effects
+```
+- `claims_backed_by_actions`: every action the reply claims was done needs a **successful** call. Catches
+  "Your refund has been issued!" after the lookup timed out and no refund happened.
+- `actions_disclosed_in_reply`: every action that **was** done must be mentioned. Catches an account deleted
+  without a word to the user.
+
+This is pattern matching, not language understanding, so it is deliberately conservative: a sentence only counts
+as a claim if it matches your pattern and is not a question, an offer ("I can refund that"), a future promise or a
+negation ("I couldn't issue a refund"). Tune the patterns to your agent's wording. `examples/reply_agents.py` has an
+honest agent and one with both bugs; `tests/test_says_vs_does.py` runs them, plus a real local model repeated at
+temperature 0.8. In 24 measured runs that model never claimed an action it hadn't taken.
+
 ## Dashboard: run history, flaky tests, trends
 agentprobe can save every pytest run and show it in a local web dashboard: pass rate over time, flaky
 tests, slow tests, tool-call stats, and every run's trajectories. Local-first: one SQLite file, no account.
@@ -210,6 +231,7 @@ Publish free: GitHub repo -> Settings -> Pages -> Deploy from branch `main`, fol
 - [x] Indirect prompt injection via a fetched web page
 - [x] Live public API (Hacker News) + shape-preserving prompt injection
 - [x] Run history, flaky-test detection, repeat runs and a local dashboard
+- [x] Says-vs-does assertions (hallucinated success, silent side effects)
 - [x] Adapter: MCP
 - [ ] Adapters: OpenAI Agents SDK, Claude Agent SDK
 - [ ] Metamorphic testing (paraphrased prompts → same trajectory)

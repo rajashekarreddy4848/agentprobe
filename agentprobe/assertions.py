@@ -1,4 +1,5 @@
 """Trajectory assertions: test what the agent DID, not just what it said."""
+from . import claims as _claims
 
 
 class TrajectoryAssertionError(AssertionError):
@@ -73,4 +74,27 @@ class Trajectory:
     def max_steps(self, n):
         if len(self.calls) > n:
             self._fail(f"Expected at most {n} tool calls, got {len(self.calls)}.")
+        return self
+
+    # ---- says vs. does: compare the reply with the actions ----
+
+    def claims_backed_by_actions(self, reply, claims):
+        """Every action the reply CLAIMS was done must have a successful call.
+        `claims` maps a tool name to a regex (or list of regexes) that a claim sentence matches, e.g.
+        {"issue_refund": r"refund.*(issued|processed)"}. Catches hallucinated success."""
+        for tool, sentence in _claims.claimed_actions(reply, claims).items():
+            calls = [c for c in self.calls if c.tool == tool]
+            if any(c.error is None for c in calls):
+                continue
+            state = "was never called" if not calls else "was called but every call failed"
+            self._fail(f"The reply claims {tool!r} happened, but it {state}.\nReply said: {sentence!r}")
+        return self
+
+    def actions_disclosed_in_reply(self, reply, disclosures):
+        """Every action that WAS done must be mentioned in the reply. `disclosures` maps a tool name
+        to a regex (or list) that a mention matches, e.g. {"delete_account": r"delet|remov"}.
+        Catches silent side effects."""
+        for tool, spec in disclosures.items():
+            if any(c.tool == tool and c.error is None for c in self.calls) and not _claims.mentions(reply, spec):
+                self._fail(f"The agent did {tool!r}, but the reply never mentions it.\nReply said: {reply!r}")
         return self

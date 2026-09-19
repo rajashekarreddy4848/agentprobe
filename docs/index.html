@@ -158,6 +158,7 @@ pre .c { color: var(--code-muted); } pre .k { color: #7fb0ff; } pre .s { color: 
 .stage { padding: 20px; min-height: 280px; display: grid; gap: 12px; align-content: start; }
 .bubble { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; max-width: 460px; font-size: .95rem; }
 .bubble small { display: block; color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; }
+.bubble.reply { border-color: var(--accent); background: var(--accent-soft); margin-left: auto; }
 .stage .step { font-size: .84rem; padding: 10px 14px; }
 .stage .badge { font-size: .68rem; }
 .demo-foot { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; font-size: .82rem; color: var(--muted); }
@@ -262,6 +263,7 @@ footer a:hover { color: var(--fg); }
           <li>Six chainable assertions for order, forbidden tools, arguments and limits</li>
           <li>A failing test prints the agent's full step-by-step trajectory</li>
           <li>Works with any tool-calling agent, scripted or LLM-driven</li>
+          <li>Says vs. does: catch a reply that claims something the agent never did</li>
         </ul>
       </div>
 <pre><span class="c"># the tool times out; the agent must not refund blindly</span>
@@ -517,6 +519,14 @@ footer a:hover { color: var(--fg); }
     }
 
     if (my !== token) return;
+    if (run.reply) {
+      var rb = el("div", "bubble reply");
+      rb.appendChild(el("small", null, "Agent replied"));
+      rb.appendChild(document.createTextNode(run.reply));
+      stage.appendChild(rb);
+      await delay(550);
+      if (my !== token) return;
+    }
     var box = el("div", "checks");
     box.appendChild(el("h3", null, "agentprobe assertions"));
     stage.appendChild(box);
