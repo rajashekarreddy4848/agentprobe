@@ -16,7 +16,6 @@ claude-demo = ["anthropic", "python-dotenv"]
 ollama-demo = ["ollama"]
 api-demo = ["fastapi", "uvicorn", "requests"]
 openai-demo = ["openai", "python-dotenv"]
-langchain = ["langchain>=1.0", "langgraph>=1.0", "langchain-ollama"]
 mcp = ["mcp>=2.0", "ollama"]
 
 [project.entry-points.pytest11]

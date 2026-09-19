@@ -102,16 +102,8 @@ you demo genuine server-side flakiness, separate from agentprobe's own synthetic
 
 ## Framework adapters
 agentprobe plugs into agent frameworks, so you can test agents you've already built.
-Both adapters are tested against a real LangGraph graph and a real MCP server, driven by a scripted
-model (deterministic, runs in CI) and by a real local LLM (skips without Ollama).
-
-**LangChain / LangGraph** wraps your tools; use the wrapped tools anywhere you'd use the originals:
-```python
-from agentprobe.adapters.langchain import wrap_tools
-
-agent = create_agent(model, wrap_tools(probe, [lookup_order, issue_refund]))
-```
-A failing tool reaches the model as a tool message (not a crash), like it would in production.
+The MCP adapter is tested against a real MCP server (in-process, real protocol), driven by scripted agents
+(deterministic, runs in CI) and by a real local LLM (skips without Ollama).
 
 **MCP** wraps the client, so every `call_tool` is recorded and fault-injected:
 ```python
@@ -123,10 +115,9 @@ async with Client(server) as client:
 A tool the *server* reports as failed (`is_error`) is recorded as an error and the agent still receives it.
 
 ```bash
-pip install -e ".[langchain,mcp]"
-pytest tests/test_adapter_langchain.py tests/test_adapter_mcp.py -v
-python -m examples.langgraph_agent   # real LLM in a LangGraph graph, with and without a fault
-python -m examples.mcp_refund_server # the refund tools as an MCP server (stdio)
+pip install -e ".[mcp]"
+pytest tests/test_adapter_mcp.py -v
+python -m examples.mcp_refund_server   # the refund tools as an MCP server (stdio)
 ```
 `Probe.wrap_async()` records any `async def` tool, so other async frameworks can be adapted the same way.
 
@@ -172,7 +163,7 @@ Publish free: GitHub repo -> Settings -> Pages -> Deploy from branch `main`, fol
 - [x] HTML trajectory report
 - [x] Real tool backend (HTTP + SQLite), not just in-memory functions
 - [x] Indirect prompt injection via a fetched web page
-- [x] Adapters: LangChain/LangGraph, MCP
+- [x] Adapter: MCP
 - [ ] Adapters: OpenAI Agents SDK, Claude Agent SDK
 - [ ] Metamorphic testing (paraphrased prompts → same trajectory)
 - [ ] Record/replay of real tool responses for CI
