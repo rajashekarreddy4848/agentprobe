@@ -18,11 +18,17 @@ api-demo = ["fastapi", "uvicorn", "requests"]
 openai-demo = ["openai", "python-dotenv"]
 mcp = ["mcp>=2.0", "ollama"]
 
+[project.scripts]
+agentprobe = "agentprobe.cli:main"
+
 [project.entry-points.pytest11]
 agentprobe = "agentprobe.plugin"
 
 [tool.setuptools]
 packages = ["agentprobe", "agentprobe.adapters"]
+
+[tool.setuptools.package-data]
+agentprobe = ["dashboard_static/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

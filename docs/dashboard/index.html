@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentprobe dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --series: #2a78d6;
+  --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --series: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 var(--font); }
+a { color: inherit; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px 64px; }
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 18px 0 8px; }
+.brand { font-weight: 700; font-size: 1.05rem; text-decoration: none; }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav a { text-decoration: none; padding: 6px 12px; border-radius: 8px; color: var(--ink2); font-size: 0.92rem; }
+nav a:hover { background: var(--border); }
+nav a[aria-current="page"] { color: var(--ink); background: var(--border); font-weight: 600; }
+.meta { color: var(--muted); font-size: 0.82rem; margin: 0 0 20px; }
+h1 { font-size: 1.35rem; margin: 8px 0 4px; }
+h2 { font-size: 1rem; margin: 0 0 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+
+/* hero + stat tiles */
+.hero-row { display: grid; grid-template-columns: minmax(240px, 1.3fr) 2fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 720px) { .hero-row { grid-template-columns: 1fr; } }
+.hero-label { color: var(--ink2); font-size: 0.85rem; }
+.hero-value { font-size: 4rem; line-height: 1.05; font-weight: 600; letter-spacing: -0.02em; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.tile .label { color: var(--ink2); font-size: 0.82rem; }
+.tile .value { font-size: 1.7rem; font-weight: 600; }
+
+/* status badges: icon + label, never color alone */
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; background: var(--tint); white-space: nowrap; }
+.badge .ic { color: var(--c); font-weight: 700; }
+.s-pass { --c: var(--good); --tint: color-mix(in srgb, var(--good) 16%, transparent); }
+.s-caught { --c: var(--good); --tint: color-mix(in srgb, var(--good) 16%, transparent); }
+.s-fail { --c: var(--crit); --tint: color-mix(in srgb, var(--crit) 16%, transparent); }
+.s-skip { --c: var(--muted); --tint: color-mix(in srgb, var(--muted) 18%, transparent); }
+.s-flaky { --c: var(--warn); --tint: color-mix(in srgb, var(--warn) 22%, transparent); }
+
+/* tables */
+.tbl { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.tbl th, .tbl td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+.tbl th { color: var(--ink2); font-weight: 600; font-size: 0.8rem; white-space: nowrap; }
+.tbl th.sortable { cursor: pointer; user-select: none; }
+.tbl th.sortable:hover { color: var(--ink); }
+.tbl td.num, .tbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tbody tr.link { cursor: pointer; }
+.tbl tbody tr.link:hover { background: color-mix(in srgb, var(--muted) 10%, transparent); }
+.scroll { overflow-x: auto; }
+.tname .file { color: var(--muted); font-size: 0.78rem; display: block; }
+.tname .name { font-weight: 600; overflow-wrap: anywhere; }
+.bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--series); vertical-align: middle; min-width: 2px; }
+.bar-track { display: inline-block; width: 90px; height: 8px; border-radius: 4px; background: var(--grid); vertical-align: middle; margin-right: 8px; overflow: hidden; }
+.bar-track .bar { display: block; height: 8px; border-radius: 4px; }
+
+/* segmented filters */
+.seg { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.seg button, .toggle button {
+  font: inherit; font-size: 0.86rem; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+}
+.seg button[aria-pressed="true"], .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.toggle { display: flex; gap: 6px; }
+
+/* trend chart */
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.chart-wrap { position: relative; }
+.chart-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart-wrap svg:focus-visible { outline: 2px solid var(--series); outline-offset: 4px; border-radius: 6px; }
+.tip {
+  position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 150px; transform: translate(-50%, -100%); white-space: nowrap; z-index: 2;
+}
+.tip .v { font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.tip .key { display: inline-block; width: 14px; height: 2px; background: var(--series); border-radius: 1px; }
+.tip .sub { color: var(--ink2); }
+
+/* outcome strip (test history) */
+.strip { display: flex; gap: 4px; flex-wrap: wrap; }
+.cell { width: 24px; height: 24px; border-radius: 5px; display: grid; place-items: center; font-size: 0.75rem; font-weight: 700; background: var(--tint); color: var(--ink); }
+.cell .ic { color: var(--c); }
+
+/* trajectories */
+details.res { border-bottom: 1px solid var(--grid); padding: 8px 0; }
+details.res:last-child { border-bottom: none; }
+details.res > summary { cursor: pointer; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; list-style: none; }
+details.res > summary::-webkit-details-marker { display: none; }
+details.res > summary::before { content: "▸"; color: var(--muted); }
+details.res[open] > summary::before { content: "▾"; }
+details.res .dur { margin-left: auto; color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+ol.steps { list-style: none; margin: 10px 0 4px 20px; padding: 0; font-family: var(--mono); font-size: 0.82rem; }
+ol.steps li { padding: 6px 0; border-bottom: 1px dashed var(--grid); }
+ol.steps li:last-child { border-bottom: none; }
+.step-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.step-head .tool { font-weight: 700; }
+.step-res { color: var(--ink2); padding-left: 18px; overflow-wrap: anywhere; }
+.step-res.err { color: var(--crit); }
+.pill { font-family: var(--font); font-size: 0.68rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; text-transform: uppercase; }
+.pill.fault { background: color-mix(in srgb, var(--warn) 22%, transparent); }
+.pill.err { background: color-mix(in srgb, var(--crit) 16%, transparent); }
+.empty { padding: 32px; text-align: center; color: var(--ink2); }
+.empty code { font-family: var(--mono); background: var(--border); padding: 2px 6px; border-radius: 4px; }
+.back { display: inline-block; margin: 8px 0; color: var(--ink2); text-decoration: none; font-size: 0.9rem; }
+.back:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#/">🔍 agentprobe</a>
+    <nav id="nav" aria-label="Sections"></nav>
+  </header>
+  <p class="meta" id="meta"></p>
+  <main id="app" aria-live="polite"></main>
+</div>
+<script src="data.js"></script>
+<script>
+(function () {
+  "use strict";
+  var DATA = null;
+  var SLOW_MS = 1000;
+  var app = document.getElementById("app");
+  var nav = document.getElementById("nav");
+  var meta = document.getElementById("meta");
+
+  /* ---------- tiny DOM helper: everything is text, never HTML (stored data is untrusted) ---------- */
+  function h(tag, props) {
+    var n = document.createElement(tag);
+    props = props || {};
+    Object.keys(props).forEach(function (k) {
+      if (k === "class") n.className = props[k];
+      else if (k === "text") n.textContent = props[k];
+      else if (k.slice(0, 2) === "on") n.addEventListener(k.slice(2), props[k]);
+      else n.setAttribute(k, props[k]);
+    });
+    function add(c) {
+      if (c == null || c === false) return;
+      if (Array.isArray(c)) { c.forEach(add); return; }
+      n.appendChild(typeof c === "string" || typeof c === "number" ? document.createTextNode(String(c)) : c);
+    }
+    for (var i = 2; i < arguments.length; i++) add(arguments[i]);
+    return n;
+  }
+  function svg(tag, attrs) {
+    var n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    return n;
+  }
+
+  /* ---------- formatting ---------- */
+  function pct(r) { return r == null ? "–" : Math.round(r * 100) + "%"; }
+  function dur(ms) { return ms < 1000 ? Math.round(ms) + " ms" : (ms / 1000).toFixed(1) + " s"; }
+  function when(iso) { var d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); }
+  function splitId(nodeid) { var i = nodeid.indexOf("::"); return i < 0 ? ["", nodeid] : [nodeid.slice(0, i), nodeid.slice(i + 2)]; }
+
+  var STATUS = {
+    "PASSED": ["s-pass", "✓", "Passed"],
+    "XFAIL (bug caught)": ["s-caught", "◆", "Bug caught"],
+    "FAILED": ["s-fail", "✗", "Failed"],
+    "XPASS": ["s-fail", "✗", "Unexpected pass"],
+    "SKIPPED": ["s-skip", "–", "Skipped"]
+  };
+  function status(o) { return STATUS[o] || ["s-skip", "?", o]; }
+  function badge(o) {
+    var s = status(o);
+    return h("span", { class: "badge " + s[0] }, h("span", { class: "ic", "aria-hidden": "true", text: s[1] }), s[2]);
+  }
+  function flakyBadge() {
+    return h("span", { class: "badge s-flaky" }, h("span", { class: "ic", "aria-hidden": "true", text: "⚠" }), "Flaky");
+  }
+  function testName(nodeid) {
+    var p = splitId(nodeid);
+    return h("span", { class: "tname" }, h("span", { class: "file", text: p[0] }), h("span", { class: "name", text: p[1] }));
+  }
+
+  /* ---------- data access (static export embeds everything; server mode fetches) ---------- */
+  function getJSON(url) { return fetch(url).then(function (r) { return r.ok ? r.json() : null; }); }
+  function getRun(id) { return DATA.run_details ? Promise.resolve(DATA.run_details[String(id)] || null) : getJSON("/api/run/" + id); }
+  function getHistory(nodeid) { return DATA.test_history ? Promise.resolve(DATA.test_history[nodeid] || []) : getJSON("/api/test?nodeid=" + encodeURIComponent(nodeid)); }
+
+  /* ---------- sortable table ---------- */
+  function sortableTable(cols, rows, initial, onRow) {
+    var state = { key: initial.key, dir: initial.dir };
+    var wrap = h("div", { class: "scroll" });
+    function render() {
+      var col = cols.filter(function (c) { return c.key === state.key; })[0];
+      var sorted = rows.slice().sort(function (a, b) {
+        var x = col.value(a), y = col.value(b);
+        if (x == null) return 1; if (y == null) return -1;
+        var r = typeof x === "string" ? x.localeCompare(y) : x - y;
+        return state.dir * r;
+      });
+      var head = h("tr");
+      cols.forEach(function (c) {
+        var th = h("th", { class: (c.num ? "num " : "") + "sortable", scope: "col", tabindex: "0",
+                           "aria-sort": c.key === state.key ? (state.dir > 0 ? "ascending" : "descending") : "none" },
+                    c.label + (c.key === state.key ? (state.dir > 0 ? " ▲" : " ▼") : ""));
+        function go() { state = { key: c.key, dir: c.key === state.key ? -state.dir : (c.num ? -1 : 1) }; render(); }
+        th.addEventListener("click", go);
+        th.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+        head.appendChild(th);
+      });
+      var body = h("tbody");
+      sorted.forEach(function (row) {
+        var tr = h("tr", onRow ? { class: "link", tabindex: "0" } : {});
+        if (onRow) {
+          tr.addEventListener("click", function () { onRow(row); });
+          tr.addEventListener("keydown", function (e) { if (e.key === "Enter") onRow(row); });
+        }
+        cols.forEach(function (c) { tr.appendChild(h("td", { class: c.num ? "num" : "" }, c.cell(row))); });
+        body.appendChild(tr);
+      });
+      wrap.replaceChildren(h("table", { class: "tbl" }, h("thead", {}, head), body));
+    }
+    render();
+    return wrap;
+  }
+
+  /* ---------- trend chart: one series, so the title names it and there is no legend box ---------- */
+  function trendChart(points) {
+    var pts = points.filter(function (p) { return p.pass_rate != null; });
+    var root = h("div", { class: "chart-wrap" });
+    if (!pts.length) { root.appendChild(h("p", { class: "muted", text: "No completed runs yet." })); return root; }
+
+    var W = 900, H = 260, M = { l: 46, r: 56, t: 14, b: 30 };
+    var min = Math.min.apply(null, pts.map(function (p) { return p.pass_rate; }));
+    var lo = Math.min(80, Math.floor((min * 100) / 20) * 20);   // 0/20/40/60/80 so ticks land on clean numbers
+    var step = (100 - lo) / 4;
+    function X(i) { return pts.length === 1 ? (M.l + W - M.r) / 2 : M.l + (i * (W - M.l - M.r)) / (pts.length - 1); }
+    function Y(r) { return M.t + (1 - (r * 100 - lo) / (100 - lo)) * (H - M.t - M.b); }
+
+    var s = svg("svg", { viewBox: "0 0 " + W + " " + H, role: "img", tabindex: "0",
+      "aria-label": "Pass rate by run. Latest " + pct(pts[pts.length - 1].pass_rate) + " across " + pts.length + " runs. Use left and right arrow keys to read each run." });
+    for (var t = 0; t <= 4; t++) {
+      var v = lo + step * t, y = Y(v / 100);
+      s.appendChild(svg("line", { x1: M.l, x2: W - M.r, y1: y, y2: y, stroke: t === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+      var lab = svg("text", { x: M.l - 8, y: y + 4, "text-anchor": "end", fill: "var(--muted)", "font-size": 12 });
+      lab.textContent = Math.round(v) + "%"; s.appendChild(lab);
+    }
+    var every = Math.max(1, Math.ceil(pts.length / 8));
+    pts.forEach(function (p, i) {
+      if (i % every !== 0 && i !== pts.length - 1) return;
+      var tx = svg("text", { x: X(i), y: H - 8, "text-anchor": "middle", fill: "var(--muted)", "font-size": 12 });
+      tx.textContent = "#" + p.run_id; s.appendChild(tx);
+    });
+
+    var d = pts.map(function (p, i) { return (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(p.pass_rate).toFixed(1); }).join(" ");
+    if (pts.length > 1) {
+      s.appendChild(svg("path", { d: d + " L" + X(pts.length - 1) + " " + Y(lo / 100) + " L" + X(0) + " " + Y(lo / 100) + " Z", fill: "var(--series)", opacity: 0.1 }));
+      s.appendChild(svg("path", { d: d, fill: "none", stroke: "var(--series)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    }
+    var last = pts[pts.length - 1];
+    s.appendChild(svg("circle", { cx: X(pts.length - 1), cy: Y(last.pass_rate), r: 5, fill: "var(--series)", stroke: "var(--surface)", "stroke-width": 2 }));
+    var endLab = svg("text", { x: X(pts.length - 1) + 12, y: Y(last.pass_rate) + 4, fill: "var(--ink)", "font-size": 13, "font-weight": 600 });
+    endLab.textContent = pct(last.pass_rate); s.appendChild(endLab);
+
+    var cross = svg("line", { y1: M.t, y2: H - M.b, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" });
+    var dot = svg("circle", { r: 5, fill: "var(--series)", stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" });
+    var hit = svg("rect", { x: M.l, y: 0, width: W - M.l - M.r + 24, height: H, fill: "transparent" });
+    s.appendChild(cross); s.appendChild(dot); s.appendChild(hit);
+
+    var tip = h("div", { class: "tip", hidden: "hidden" });
+    root.appendChild(s); root.appendChild(tip);
+
+    function show(i) {
+      var p = pts[i], x = X(i), y = Y(p.pass_rate);
+      cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
+      dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("visibility", "visible");
+      tip.replaceChildren(
+        h("div", { class: "v" }, h("span", { class: "key" }), pct(p.pass_rate)),
+        h("div", { class: "sub", text: "Run #" + p.run_id + (p.label ? " · " + p.label : "") }),
+        h("div", { class: "sub", text: when(p.started_at) + " · " + p.total + " tests" }));
+      var box = s.getBoundingClientRect(), scale = box.width / W;
+      tip.style.left = Math.min(Math.max(x * scale, 90), box.width - 90) + "px";
+      tip.style.top = (y * scale - 12) + "px";
+      tip.hidden = false;
+    }
+    function hide() { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); tip.hidden = true; }
+    function nearest(evt) {
+      var box = s.getBoundingClientRect(), x = ((evt.clientX - box.left) / box.width) * W, best = 0;
+      pts.forEach(function (_, i) { if (Math.abs(X(i) - x) < Math.abs(X(best) - x)) best = i; });
+      return best;
+    }
+    hit.addEventListener("pointermove", function (e) { show(nearest(e)); });
+    hit.addEventListener("pointerleave", hide);
+    var active = pts.length - 1;
+    s.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowLeft") { active = Math.max(0, active - 1); show(active); e.preventDefault(); }
+      if (e.key === "ArrowRight") { active = Math.min(pts.length - 1, active + 1); show(active); e.preventDefault(); }
+      if (e.key === "Escape") hide();
+    });
+    s.addEventListener("blur", hide);
+    return root;
+  }
+
+  function trendTable(points) {
+    return sortableTable([
+      { key: "run", label: "Run", value: function (p) { return p.run_id; }, cell: function (p) { return "#" + p.run_id + (p.label ? " · " + p.label : ""); } },
+      { key: "when", label: "When", value: function (p) { return p.started_at; }, cell: function (p) { return when(p.started_at); } },
+      { key: "rate", label: "Pass rate", num: true, value: function (p) { return p.pass_rate; }, cell: function (p) { return pct(p.pass_rate); } },
+      { key: "total", label: "Tests", num: true, value: function (p) { return p.total; }, cell: function (p) { return String(p.total); } }
+    ], points, { key: "run", dir: -1 });
+  }
+
+  /* ---------- views ---------- */
+  function overview() {
+    var S = DATA.summary, latest = S.latest;
+    if (!latest) return empty();
+    var flaky = DATA.tests.filter(function (t) { return t.flaky; });
+    var slow = DATA.tests.slice().sort(function (a, b) { return b.avg_duration_ms - a.avg_duration_ms; }).slice(0, 5);
+
+    var chartBody = h("div"), mode = "chart";
+    var bChart = h("button", { type: "button", "aria-pressed": "true", text: "Chart" });
+    var bTable = h("button", { type: "button", "aria-pressed": "false", text: "Table" });
+    function draw() {
+      bChart.setAttribute("aria-pressed", String(mode === "chart")); bTable.setAttribute("aria-pressed", String(mode === "table"));
+      chartBody.replaceChildren(mode === "chart" ? trendChart(DATA.trend) : trendTable(DATA.trend));
+    }
+    bChart.addEventListener("click", function () { mode = "chart"; draw(); });
+    bTable.addEventListener("click", function () { mode = "table"; draw(); });
+    draw();
+
+    function tile(label, value) { return h("div", { class: "tile" }, h("div", { class: "label", text: label }), h("div", { class: "value", text: String(value) })); }
+    function list(items, empty, rowFn) {
+      return items.length ? h("div", { class: "scroll" }, h("table", { class: "tbl" }, h("tbody", {}, items.map(rowFn)))) : h("p", { class: "muted small", text: empty });
+    }
+    function testRow(extra) {
+      return function (t) {
+        var tr = h("tr", { class: "link", tabindex: "0" }, h("td", {}, testName(t.nodeid)), h("td", { class: "num" }, extra(t)));
+        function go() { location.hash = "#/test/" + encodeURIComponent(t.nodeid); }
+        tr.addEventListener("click", go); tr.addEventListener("keydown", function (e) { if (e.key === "Enter") go(); });
+        return tr;
+      };
+    }
+    return h("div", {},
+      h("div", { class: "hero-row" },
+        h("div", { class: "card" },
+          h("div", { class: "hero-label", text: "Latest pass rate · run #" + latest.id }),
+          h("div", { class: "hero-value", text: pct(latest.pass_rate) }),
+          h("div", { class: "muted small", text: latest.passed + " passed · " + latest.caught + " bugs caught · " + latest.failed + " failed · " + latest.skipped + " skipped" })),
+        h("div", { class: "tiles" }, tile("Runs", S.runs), tile("Tests tracked", S.tests), tile("Flaky tests", S.flaky), tile("Bugs caught (latest)", latest.caught))),
+      h("div", { class: "card" },
+        h("div", { class: "chart-head" }, h("h2", { text: "Pass rate by run" }), h("div", { class: "toggle" }, bChart, bTable)),
+        chartBody,
+        h("p", { class: "muted small", text: "Passed and known bugs caught count as healthy; failed and unexpected passes do not. Skipped tests are excluded." })),
+      h("div", { class: "grid2" },
+        h("div", { class: "card" }, h("h2", { text: "Flaky tests" }),
+          list(flaky.slice(0, 5), "No flaky tests. Every test behaves the same way each run.",
+            testRow(function (t) { return t.repeat_pass_rate != null ? pct(t.repeat_pass_rate) + " of repeats" : pct(t.pass_rate) + " of runs"; }))),
+        h("div", { class: "card" }, h("h2", { text: "Slowest tests" }),
+          list(slow, "No timing data yet.", testRow(function (t) { return dur(t.avg_duration_ms); })))));
+  }
+
+  function runsView() {
+    if (!DATA.runs.length) return empty();
+    return h("div", { class: "card" }, h("h2", { text: "Runs" }), sortableTable([
+      { key: "id", label: "Run", num: true, value: function (r) { return r.id; }, cell: function (r) { return "#" + r.id + (r.label ? " · " + r.label : ""); } },
+      { key: "when", label: "When", value: function (r) { return r.started_at; }, cell: function (r) { return when(r.started_at); } },
+      { key: "rate", label: "Pass rate", num: true, value: function (r) { return r.pass_rate; },
+        cell: function (r) { return h("span", {}, h("span", { class: "bar-track" }, h("span", { class: "bar", style: "width:" + Math.round((r.pass_rate || 0) * 100) + "%" })), pct(r.pass_rate)); } },
+      { key: "passed", label: "Passed", num: true, value: function (r) { return r.passed; }, cell: function (r) { return String(r.passed); } },
+      { key: "caught", label: "Bugs caught", num: true, value: function (r) { return r.caught; }, cell: function (r) { return String(r.caught); } },
+      { key: "failed", label: "Failed", num: true, value: function (r) { return r.failed; }, cell: function (r) { return String(r.failed); } },
+      { key: "skipped", label: "Skipped", num: true, value: function (r) { return r.skipped; }, cell: function (r) { return String(r.skipped); } }
+    ], DATA.runs, { key: "id", dir: -1 }, function (r) { location.hash = "#/run/" + r.id; }));
+  }
+
+  function steps(calls) {
+    if (!calls.length) return h("p", { class: "muted small", text: "No tool calls recorded." });
+    return h("ol", { class: "steps" }, calls.map(function (c) {
+      var args = Object.keys(c.args).map(function (k) { return k + "=" + c.args[k]; }).join(", ");
+      return h("li", {},
+        h("div", { class: "step-head" }, h("span", { text: c.step + "." }), h("span", { class: "tool", text: c.tool + "(" + args + ")" }),
+          c.fault ? h("span", { class: "pill fault", text: "fault: " + c.fault }) : null,
+          c.error ? h("span", { class: "pill err", text: "error" }) : null),
+        h("div", { class: "step-res" + (c.error ? " err" : ""), text: c.error ? c.error : "→ " + c.result }));
+    }));
+  }
+
+  function runDetail(id) {
+    var box = h("div", {}, h("p", { class: "muted", text: "Loading…" }));
+    getRun(id).then(function (run) {
+      if (!run) { box.replaceChildren(h("p", { text: "Run not found." })); return; }
+      var filter = "all", list = h("div");
+      var defs = [["all", "All"], ["failed", "Failed"], ["caught", "Bugs caught"], ["skipped", "Skipped"]];
+      var seg = h("div", { class: "seg" });
+      function match(r) {
+        return filter === "all" || (filter === "failed" && (r.outcome === "FAILED" || r.outcome === "XPASS")) ||
+          (filter === "caught" && r.outcome === "XFAIL (bug caught)") || (filter === "skipped" && r.outcome === "SKIPPED");
+      }
+      function draw() {
+        Array.prototype.forEach.call(seg.children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.f === filter)); });
+        var rows = run.results.filter(match);
+        list.replaceChildren.apply(list, rows.length ? rows.map(function (r) {
+          var d = h("details", { class: "res" },
+            h("summary", {}, badge(r.outcome), testName(r.nodeid),
+              r.repeat_runs ? h("span", { class: "muted small", text: r.repeat_passes + "/" + r.repeat_runs + " repeats passed" }) : null,
+              h("span", { class: "dur", text: dur(r.duration_ms) })),
+            steps(r.calls));
+          return d;
+        }) : [h("p", { class: "muted", text: "Nothing in this filter." })]);
+      }
+      defs.forEach(function (f) {
+        var b = h("button", { type: "button", "data-f": f[0], text: f[1] }); b.addEventListener("click", function () { filter = f[0]; draw(); }); seg.appendChild(b);
+      });
+      draw();
+      box.replaceChildren(
+        h("a", { class: "back", href: "#/runs", text: "← All runs" }),
+        h("h1", { text: "Run #" + run.id + (run.label ? " · " + run.label : "") }),
+        h("p", { class: "muted small", text: when(run.started_at) + " · " + pct(run.pass_rate) + " pass rate · " + run.passed + " passed · " + run.caught + " bugs caught · " + run.failed + " failed · " + run.skipped + " skipped" }),
+        h("div", { class: "card" }, seg, list));
+    });
+    return box;
+  }
+
+  function testsView() {
+    if (!DATA.tests.length) return empty();
+    var filter = "all", holder = h("div");
+    var defs = [["all", "All"], ["flaky", "Flaky"], ["failing", "Failing"], ["slow", "Slow (≥ 1 s)"]];
+    var seg = h("div", { class: "seg" });
+    function match(t) {
+      return filter === "all" || (filter === "flaky" && t.flaky) || (filter === "failing" && t.last_outcome === "FAILED") ||
+        (filter === "slow" && t.avg_duration_ms >= SLOW_MS);
+    }
+    function draw() {
+      Array.prototype.forEach.call(seg.children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.f === filter)); });
+      var rows = DATA.tests.filter(match);
+      holder.replaceChildren(rows.length ? sortableTable([
+        { key: "name", label: "Test", value: function (t) { return t.nodeid; }, cell: function (t) { return h("span", {}, testName(t.nodeid), t.flaky ? flakyBadge() : null); } },
+        { key: "runs", label: "Runs", num: true, value: function (t) { return t.runs; }, cell: function (t) { return String(t.runs); } },
+        { key: "rate", label: "Pass rate", num: true, value: function (t) { return t.pass_rate; }, cell: function (t) { return pct(t.pass_rate); } },
+        { key: "rep", label: "Repeat pass rate", num: true, value: function (t) { return t.repeat_pass_rate; }, cell: function (t) { return pct(t.repeat_pass_rate); } },
+        { key: "avg", label: "Avg time", num: true, value: function (t) { return t.avg_duration_ms; }, cell: function (t) { return dur(t.avg_duration_ms); } },
+        { key: "last", label: "Last result", value: function (t) { return t.last_outcome; }, cell: function (t) { return badge(t.last_outcome); } }
+      ], rows, { key: "name", dir: 1 }, function (t) { location.hash = "#/test/" + encodeURIComponent(t.nodeid); }) : h("p", { class: "muted", text: "No tests match this filter." }));
+    }
+    defs.forEach(function (f) {
+      var b = h("button", { type: "button", "data-f": f[0], text: f[1] }); b.addEventListener("click", function () { filter = f[0]; draw(); }); seg.appendChild(b);
+    });
+    draw();
+    return h("div", { class: "card" }, h("h2", { text: "Tests" }), seg, holder);
+  }
+
+  function testDetail(nodeid) {
+    var box = h("div", {}, h("p", { class: "muted", text: "Loading…" }));
+    getHistory(nodeid).then(function (hist) {
+      var t = DATA.tests.filter(function (x) { return x.nodeid === nodeid; })[0];
+      if (!t || !hist) { box.replaceChildren(h("p", { text: "Test not found." })); return; }
+      var strip = h("div", { class: "strip" }, hist.map(function (x) {
+        var s = status(x.outcome);
+        var a = h("a", { class: "cell " + s[0], href: "#/run/" + x.run_id, title: "Run #" + x.run_id + ": " + s[2], "aria-label": "Run " + x.run_id + ": " + s[2] },
+          h("span", { class: "ic", "aria-hidden": "true", text: s[1] }));
+        return a;
+      }));
+      box.replaceChildren(
+        h("a", { class: "back", href: "#/tests", text: "← All tests" }),
+        h("h1", { class: "tname" }, testName(nodeid)),
+        h("p", {}, t.flaky ? flakyBadge() : null, " ", badge(t.last_outcome)),
+        h("div", { class: "tiles" },
+          h("div", { class: "tile" }, h("div", { class: "label", text: "Runs" }), h("div", { class: "value", text: String(t.runs) })),
+          h("div", { class: "tile" }, h("div", { class: "label", text: "Pass rate" }), h("div", { class: "value", text: pct(t.pass_rate) })),
+          h("div", { class: "tile" }, h("div", { class: "label", text: "Repeat pass rate" }), h("div", { class: "value", text: pct(t.repeat_pass_rate) })),
+          h("div", { class: "tile" }, h("div", { class: "label", text: "Avg time" }), h("div", { class: "value", text: dur(t.avg_duration_ms) }))),
+        h("div", { class: "card", style: "margin-top:16px" }, h("h2", { text: "History (oldest to newest)" }), strip),
+        h("div", { class: "card" }, h("h2", { text: "Every run" }), sortableTable([
+          { key: "run", label: "Run", num: true, value: function (x) { return x.run_id; }, cell: function (x) { return "#" + x.run_id; } },
+          { key: "when", label: "When", value: function (x) { return x.started_at; }, cell: function (x) { return when(x.started_at); } },
+          { key: "out", label: "Result", value: function (x) { return x.outcome; }, cell: function (x) { return badge(x.outcome); } },
+          { key: "rep", label: "Repeats passed", num: true, value: function (x) { return x.repeat_runs ? x.repeat_passes / x.repeat_runs : null; },
+            cell: function (x) { return x.repeat_runs ? x.repeat_passes + "/" + x.repeat_runs : "–"; } },
+          { key: "dur", label: "Time", num: true, value: function (x) { return x.duration_ms; }, cell: function (x) { return dur(x.duration_ms); } }
+        ], hist, { key: "run", dir: -1 }, function (x) { location.hash = "#/run/" + x.run_id; })));
+    });
+    return box;
+  }
+
+  function toolsView() {
+    if (!DATA.tools.length) return h("div", { class: "card empty", text: "No tool calls recorded yet." });
+    var max = Math.max.apply(null, DATA.tools.map(function (t) { return t.calls; }));
+    return h("div", { class: "card" }, h("h2", { text: "Tool calls across all runs" }), sortableTable([
+      { key: "tool", label: "Tool", value: function (t) { return t.tool; }, cell: function (t) { return h("span", { class: "name", text: t.tool }); } },
+      { key: "calls", label: "Calls", num: true, value: function (t) { return t.calls; },
+        cell: function (t) { return h("span", {}, h("span", { class: "bar-track" }, h("span", { class: "bar", style: "width:" + Math.round((t.calls / max) * 100) + "%" })), String(t.calls)); } },
+      { key: "errors", label: "Errors", num: true, value: function (t) { return t.errors; }, cell: function (t) { return String(t.errors); } },
+      { key: "faulted", label: "Injected faults", num: true, value: function (t) { return t.faulted; }, cell: function (t) { return String(t.faulted); } },
+      { key: "rate", label: "Error rate", num: true, value: function (t) { return t.error_rate; }, cell: function (t) { return pct(t.error_rate); } }
+    ], DATA.tools, { key: "calls", dir: -1 }), h("p", { class: "muted small", text: "Errors include faults you injected on purpose, so a high error rate on a chaos-tested tool is expected." }));
+  }
+
+  function empty() {
+    return h("div", { class: "card empty" }, h("p", { text: "No runs saved yet." }),
+      h("p", {}, "Run your tests with ", h("code", { text: "pytest --agentprobe-store=runs.db" }), " and refresh this page."));
+  }
+
+  /* ---------- router ---------- */
+  var TABS = [["#/", "Overview"], ["#/runs", "Runs"], ["#/tests", "Tests"], ["#/tools", "Tools"]];
+  function route() {
+    var hash = location.hash || "#/", m;
+    var section = hash.indexOf("#/run/") === 0 ? "#/runs" : hash.indexOf("#/test/") === 0 ? "#/tests" : hash;
+    nav.replaceChildren.apply(nav, TABS.map(function (t) {
+      return h("a", Object.assign({ href: t[0] }, t[0] === section ? { "aria-current": "page" } : {}), t[1]);
+    }));
+    var view;
+    if ((m = hash.match(/^#\/run\/(\d+)$/))) view = runDetail(Number(m[1]));
+    else if ((m = hash.match(/^#\/test\/(.+)$/))) view = testDetail(decodeURIComponent(m[1]));
+    else if (hash === "#/runs") view = runsView();
+    else if (hash === "#/tests") view = testsView();
+    else if (hash === "#/tools") view = toolsView();
+    else view = overview();
+    app.replaceChildren(view);
+    window.scrollTo(0, 0);
+  }
+
+  function start(data) {
+    DATA = data;
+    meta.textContent = "Generated " + when(data.generated_at) + (data.run_details ? " · static export" : " · live");
+    window.addEventListener("hashchange", route);
+    route();
+  }
+  if (window.AGENTPROBE_DATA) start(window.AGENTPROBE_DATA);
+  else getJSON("/api/data").then(function (d) { if (d) start(d); else app.textContent = "Could not load data."; });
+})();
+</script>
+</body>
+</html>

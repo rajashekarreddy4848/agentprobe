@@ -81,7 +81,7 @@ SYSTEM = (
 )
 
 
-def run_ollama_agent(message, tools, max_turns=6):
+def run_ollama_agent(message, tools, max_turns=6, temperature=0):
     """Run the local model in a tool-use loop. `tools` is the (probe-wrapped) dict of callables."""
     messages = [
         {"role": "system", "content": SYSTEM},
@@ -90,7 +90,7 @@ def run_ollama_agent(message, tools, max_turns=6):
 
     for _ in range(max_turns):
         response = ollama.chat(
-            model=MODEL, messages=messages, tools=TOOL_SCHEMAS, options={"temperature": 0}
+            model=MODEL, messages=messages, tools=TOOL_SCHEMAS, options={"temperature": temperature}
         )
         msg = response["message"]
 
