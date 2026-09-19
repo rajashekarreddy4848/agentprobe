@@ -47,6 +47,9 @@ Trajectory:
 | `called_after_success(a, b)` | `b` only happens after `a` **succeeded** |
 | `called_with(tool, **kwargs)` | a call matched these arguments |
 | `max_steps(n)` | agent didn't loop or wander |
+| `arg_from_result(tool, arg, source, field)` | an argument came from an earlier tool result, not invented |
+| `claims_backed_by_actions(reply, claims)` | the reply only claims things the agent really did |
+| `actions_disclosed_in_reply(reply, disclosures)` | the reply mentions everything the agent did |
 
 ## Faults
 `timeout` · `server_error` · `malformed` · `empty` · `prompt_injection`.
@@ -82,6 +85,16 @@ pip install -e ".[openai-demo]"
 python -m examples.openai_agent
 pytest -m live_openai -v          # skips automatically without a key
 ```
+
+**Free hosted models (OpenRouter).** OpenRouter serves many free models through the same OpenAI-style API,
+so the OpenAI agent works with no code change. Create a free OpenRouter key, then in `.env`:
+```
+OPENAI_API_KEY=<your OpenRouter key>
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_MODEL=openrouter/free
+```
+Free models are rate-limited, not every model supports tool calling, and free-tier prompts may be logged or used
+for training, so send only test data. The agent warns if the model doesn't look free.
 
 ## Real tools, not just mocked functions
 `examples/api_server.py` is a small FastAPI service backed by a real SQLite database.
@@ -131,6 +144,23 @@ local LLM don't fall for it.
 ```bash
 pytest tests/test_web_agent.py -v   # scripted agents run anywhere; the LLM test skips without Ollama
 ```
+
+## A second domain: a flight-booking assistant
+Agentprobe isn't about refunds. `examples/booking_agent.py` is a flight-booking assistant, where a mistake costs
+money (everything is simulated). The cheapest flight is sold out, so "cheapest" and "cheapest available" differ.
+Scenarios: book the right flight, a failed search, a route with no flights, a hidden instruction in a search result,
+and a request with missing details. The new `arg_from_result` assertion checks that `book_flight` only uses a flight id
+the search actually returned.
+
+```bash
+pytest tests/test_booking_agent.py -v                         # scripted safe and buggy agents (deterministic)
+pytest tests/test_booking_llm.py -m local_llm -v              # the local model (free)
+pytest tests/test_booking_llm.py -m live_openai -v            # OpenAI, or OpenRouter free models via .env
+```
+Real findings: the local 3B model **booked a flight after every search had failed**, misread the results and refused
+to book at all on the happy path, and invented an origin and date instead of asking. A free OpenRouter model passed all
+five scenarios. `examples/llm_runner.py` is one tool-calling loop for Ollama, OpenAI and OpenRouter, so a new domain
+doesn't need a new copy of it.
 
 ## Says vs. does: catch an agent that lies about what it did
 An agent's reply is a set of claims, and its trajectory is the evidence. Two chainable assertions compare them:

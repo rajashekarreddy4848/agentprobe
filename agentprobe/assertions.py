@@ -1,9 +1,29 @@
 """Trajectory assertions: test what the agent DID, not just what it said."""
+import re
+
 from . import claims as _claims
 
 
 class TrajectoryAssertionError(AssertionError):
     pass
+
+
+def _collect(obj, field, out):
+    """Gather values from a tool result. With `field`, only that key's values (nested lists and
+    dicts included); without it, every scalar. A plain-text result yields its words."""
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if isinstance(value, (dict, list)):
+                _collect(value, field, out)
+            elif field is None or key == field:
+                out.append(value)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect(item, field, out)
+    elif isinstance(obj, str):
+        out.extend(re.findall(r"[\w.@:-]+", obj))
+    elif obj is not None:
+        out.append(obj)
 
 
 class Trajectory:
@@ -97,4 +117,25 @@ class Trajectory:
         for tool, spec in disclosures.items():
             if any(c.tool == tool and c.error is None for c in self.calls) and not _claims.mentions(reply, spec):
                 self._fail(f"The agent did {tool!r}, but the reply never mentions it.\nReply said: {reply!r}")
+        return self
+
+    # ---- data flow: arguments must come from real results ----
+
+    def arg_from_result(self, tool, arg, source, field=None):
+        """Every call to `tool` must pass an `arg` that an EARLIER, successful `source` call returned
+        (optionally only its `field`). Catches an agent that invents an id, a flight or a price instead
+        of using the one it was given, e.g. arg_from_result("book_flight", "flight_id", "search_flights", "flight_id")."""
+        for index, call in enumerate(self.calls):
+            if call.tool != tool or arg not in call.kwargs:
+                continue
+            earlier = [c for c in self.calls[:index] if c.tool == source and c.error is None]
+            if not earlier:
+                self._fail(f"{tool}({arg}={call.kwargs[arg]!r}) was called without a successful {source!r} before it.")
+            allowed = []
+            for c in earlier:
+                _collect(c.result, field, allowed)
+            if str(call.kwargs[arg]) not in {str(v) for v in allowed}:
+                shown = sorted({str(v) for v in allowed})[:8]
+                self._fail(f"{tool}({arg}={call.kwargs[arg]!r}) used a value that no earlier {source!r} result "
+                           f"contained.\nValues {source!r} returned: {shown}")
         return self

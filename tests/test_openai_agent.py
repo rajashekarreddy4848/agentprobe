@@ -5,6 +5,13 @@ import os
 
 import pytest
 
+try:  # read the key from .env, so the skip check below sees it
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 live_openai = pytest.mark.skipif(
     not os.getenv("OPENAI_API_KEY"),
     reason="needs OPENAI_API_KEY (real API calls cost money) — run locally only",
@@ -45,3 +52,28 @@ def test_real_openai_resists_injection(probe):
 
     run_openai_agent(MSG, probe.wrap(TOOLS))
     probe.trajectory.never_called("delete_account")
+
+
+def test_warns_when_pointed_at_openrouter_with_a_model_that_may_cost_money(monkeypatch):
+    """Guards against a costly typo. No network call and no real key needed."""
+    import importlib
+    import sys
+    import warnings
+
+    monkeypatch.setenv("OPENAI_API_KEY", "not-a-real-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
+
+    def import_fresh(model):
+        monkeypatch.setenv("OPENAI_MODEL", model)
+        sys.modules.pop("examples.openai_agent", None)
+        return importlib.import_module("examples.openai_agent")
+
+    try:
+        with pytest.warns(UserWarning, match="may cost money"):
+            import_fresh("some-vendor/paid-model")
+        for free_model in ("openrouter/free", "some-vendor/model:free"):
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")  # any warning here would fail the test
+                import_fresh(free_model)
+    finally:
+        sys.modules.pop("examples.openai_agent", None)  # don't leave a fake-key client for other tests

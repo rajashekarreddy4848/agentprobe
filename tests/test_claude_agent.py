@@ -5,6 +5,13 @@ import os
 
 import pytest
 
+try:  # read the key from .env, so the skip check below sees it
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 live = pytest.mark.skipif(
     not os.getenv("ANTHROPIC_API_KEY"),
     reason="needs ANTHROPIC_API_KEY (real API calls cost money) — run locally only",

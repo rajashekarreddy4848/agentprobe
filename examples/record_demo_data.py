@@ -1,6 +1,6 @@
 """Record real agent runs and write them to docs/demo-data.js for the demo website.
-Three suites: a refund agent (faults injected into tools), a web-reading agent (a real poisoned
-page fetched over local HTTP), and says-vs-does (the reply compared with the actions). Needs
+Four suites: a refund agent (faults injected into tools), a web-reading agent (a real poisoned
+page fetched over local HTTP), and says-vs-does (the reply compared with the actions), and a flight-booking assistant. Needs
 `ollama serve` running for the LLM rows.
 
 Run:
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from agentprobe import Probe, TrajectoryAssertionError
 
-from examples import refund_agent, reply_agents, web_agent
+from examples import booking_agent, booking_tools, refund_agent, reply_agents, web_agent
 from examples.demo_site import serve
 from examples.ollama_agent import MODEL as REFUND_MODEL
 from examples.ollama_agent import run_ollama_agent
@@ -136,6 +136,19 @@ def says_suite():
         "tools": refund_agent.TOOLS,
     }
 
+def booking_suite():
+    return {
+        "key": "booking",
+        "title": "Booking assistant",
+        "blurb": "A flight-booking assistant, where a mistake costs money. Everything is simulated.",
+        "scenarioTitle": "Situation",
+        "scenarios": booking_agent.SCENARIOS,
+        "agents": agents(booking_agent.safe_booking_agent, booking_agent.buggy_booking_agent,
+                         booking_agent.ollama_booking_agent, f"Real LLM ({REFUND_MODEL}, local Ollama)"),
+        "tools": booking_tools.TOOLS,
+    }
+
+
 
 def _run_check(check, traj, reply):
     takes_reply = len(inspect.signature(check).parameters) == 2
@@ -156,7 +169,8 @@ def run_checks(traj, checks, reply=None):
 def record(agent_fn, tools, scenario):
     probe = Probe()
     if scenario["fault"]:
-        probe.inject(*scenario["fault"])
+        tool, kind, *rest = scenario["fault"]
+        probe.inject(tool, kind, **(rest[0] if rest else {}))
     reply = None
     try:
         reply = agent_fn(scenario["message"], probe.wrap(tools))
@@ -194,7 +208,7 @@ def build(suite):
 
 if __name__ == "__main__":
     with serve(port=WEB_PORT) as base:
-        data = {"suites": [build(refund_suite()), build(web_suite(base)), build(says_suite())]}
+        data = {"suites": [build(refund_suite()), build(web_suite(base)), build(says_suite()), build(booking_suite())]}
 
     out = Path(__file__).resolve().parent.parent / "docs" / "demo-data.js"
     out.parent.mkdir(exist_ok=True)

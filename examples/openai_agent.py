@@ -6,8 +6,15 @@ versions, so the same faults and trajectory assertions work unchanged.
 
 Run manually (needs OPENAI_API_KEY in .env), not in CI:
     python -m examples.openai_agent
+
+Free option: OpenRouter serves many free models through the same API. In .env set
+    OPENAI_API_KEY=<your OpenRouter key>
+    OPENAI_BASE_URL=https://openrouter.ai/api/v1
+    OPENAI_MODEL=openrouter/free
 """
 import json
+import os
+import warnings
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -17,8 +24,18 @@ from examples.refund_agent import TOOLS
 load_dotenv()
 client = OpenAI()  # reads OPENAI_API_KEY from the environment
 
-# Check https://platform.openai.com/docs/models for the current recommended model.
-MODEL = "gpt-4o-mini"
+# Model names change over time: see https://platform.openai.com/docs/models, then either edit this
+# default or set OPENAI_MODEL in your .env without touching the code.
+MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+# Works with any OpenAI-compatible service by setting OPENAI_BASE_URL. On OpenRouter, free models
+# end in ":free" (or use "openrouter/free"); anything else may cost money.
+if "openrouter.ai" in os.getenv("OPENAI_BASE_URL", "") and not (MODEL.endswith(":free") or MODEL == "openrouter/free"):
+    warnings.warn(
+        f"OPENAI_MODEL={MODEL!r} doesn't look like a free OpenRouter model (expected an id ending in "
+        "':free', or 'openrouter/free'). Calls to it may cost money.",
+        stacklevel=2,
+    )
 
 TOOL_SCHEMAS = [
     {
